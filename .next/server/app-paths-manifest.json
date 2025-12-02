@@ -1,0 +1,6 @@
+{
+  "/page": "app/page.js",
+  "/challenges/page": "app/challenges/page.js",
+  "/api/challenges/route": "app/api/challenges/route.js",
+  "/challenges/create/page": "app/challenges/create/page.js"
+}
