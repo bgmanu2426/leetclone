@@ -8,20 +8,22 @@ x-logging:
 services:
   server:
     image: judge0/judge0:1.13.1
-    volumes:
-      - ./judge0.conf:/judge0.conf:ro
+    env_file: judge0.conf
     ports:
       - "2358:2358"
     privileged: true
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
     <<: *default-logging
     restart: always
 
   worker:
     image: judge0/judge0:1.13.1
     command: ["./scripts/workers"]
-    volumes:
-      - ./judge0.conf:/judge0.conf:ro
+    env_file: judge0.conf
     privileged: true
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
     <<: *default-logging
     restart: always
 

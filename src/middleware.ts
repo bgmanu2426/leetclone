@@ -1,17 +1,24 @@
 import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
 
-const isProtectedRoute = createRouteMatcher(['/challenges/create(.*)'])
+const isProtectedRoute = createRouteMatcher(['/challenges(.*)'])
+const isHomepage = createRouteMatcher(['/'])
 
 export default clerkMiddleware((auth, req) => {
-  if (isProtectedRoute(req)) {
-    const { userId } = auth()
-    if (!userId) {
-      const signInUrl = new URL('/sign-in', req.url)
-      signInUrl.searchParams.set('redirect_url', req.url)
-      return NextResponse.redirect(signInUrl)
-    }
+  const { userId } = auth()
+  
+  // Redirect authenticated users from homepage to challenges
+  if (isHomepage(req) && userId && req.nextUrl.pathname === '/') {
+    return NextResponse.redirect(new URL('/challenges', req.url))
   }
+  
+  // Protect challenges routes - redirect unauthenticated users to sign-in
+  if (isProtectedRoute(req) && !userId) {
+    const signInUrl = new URL('/sign-in', req.url)
+    signInUrl.searchParams.set('redirect_url', req.url)
+    return NextResponse.redirect(signInUrl)
+  }
+  
   return NextResponse.next()
 })
 

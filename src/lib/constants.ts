@@ -6,4 +6,4 @@ export const JUDGE0_LANGUAGE_MAP = {
 }
 
 export const DEFAULT_CPU_TIME = 5
-export const DEFAULT_MEMORY = 256
+export const DEFAULT_MEMORY = 262144 // 256MB in kilobytes
