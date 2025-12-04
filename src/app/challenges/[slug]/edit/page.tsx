@@ -1,10 +1,12 @@
 "use client"
 import React, { useState, useEffect } from "react"
 import { useUser } from "@clerk/nextjs"
+import { useRouter } from "next/navigation"
 import { JUDGE0_LANGUAGE_MAP } from "@/src/lib/constants"
 
 export default function EditChallengePage({ params }: { params: { slug: string } }) {
-  const { user } = useUser()
+  const { user, isLoaded } = useUser()
+  const router = useRouter()
   const slug = params.slug
   const [loading, setLoading] = useState(true)
   const [title, setTitle] = useState("")
@@ -14,21 +16,23 @@ export default function EditChallengePage({ params }: { params: { slug: string }
   const [testCases, setTestCases] = useState([{ input: "", output: "" }])
   const [starterCode, setStarterCode] = useState<Record<string, string>>({})
 
+  // Check if user is admin
+  const isAdmin = (user?.publicMetadata?.role as string) === 'admin'
+
   useEffect(() => {
     async function loadChallenge() {
+      // Check admin access first
+      if (isLoaded && !isAdmin) {
+        alert("Only administrators can edit challenges")
+        router.push(`/challenges/${slug}`)
+        return
+      }
+
       const res = await fetch(`/api/challenges?slug=${slug}`)
       const json = await res.json()
       
       if (json.challenge) {
         const c = json.challenge
-        
-        // Check if user is the creator
-        if (user && c.creatorId !== user.id) {
-          alert("You don't have permission to edit this challenge")
-          window.location.href = `/challenges/${slug}`
-          return
-        }
-        
         setTitle(c.title)
         setDescription(c.description)
         setDifficulty(c.difficulty)
@@ -44,10 +48,10 @@ export default function EditChallengePage({ params }: { params: { slug: string }
       setLoading(false)
     }
     
-    if (user) {
+    if (isLoaded) {
       loadChallenge()
     }
-  }, [slug, user])
+  }, [slug, isLoaded, isAdmin, router])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()

@@ -1,5 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
+import { useUser } from '@clerk/nextjs'
+import { useRouter } from 'next/navigation'
 
 interface Entry {
   userId: string
@@ -10,11 +12,23 @@ interface Entry {
 }
 
 export default function LeaderboardPage({ params }: { params: { slug: string } }) {
+  const { user, isLoaded } = useUser()
+  const router = useRouter()
   const [entries, setEntries] = useState<Entry[]>([])
   const [loading, setLoading] = useState(true)
 
+  // Check if user is admin
+  const isAdmin = (user?.publicMetadata?.role as string) === 'admin'
+
   useEffect(() => {
     async function load() {
+      // Check admin access
+      if (isLoaded && !isAdmin) {
+        alert('Only administrators can view the leaderboard')
+        router.push(`/challenges/${params.slug}`)
+        return
+      }
+
       try {
         const res = await fetch(`/api/challenges/${params.slug}/leaderboard`)
         const j = await res.json()
@@ -23,8 +37,9 @@ export default function LeaderboardPage({ params }: { params: { slug: string } }
         setLoading(false)
       }
     }
-    load()
-  }, [params.slug])
+    
+    if (isLoaded) load()
+  }, [params.slug, isLoaded, isAdmin, router])
 
   const getRankStyle = (rank: number) => {
     if (rank === 1) return 'bg-[#ffc01e]/20 text-[#ffc01e]'

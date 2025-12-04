@@ -1,6 +1,7 @@
 "use client"
 import React, { useEffect, useState } from "react"
 import { useUser } from "@clerk/nextjs"
+import { useRouter } from "next/navigation"
 
 interface Submission {
   _id: string
@@ -21,17 +22,28 @@ interface Challenge {
 
 export default function AllSubmissionsPage({ params }: { params: { slug: string } }) {
   const slug = params.slug
-  const { user } = useUser()
+  const { user, isLoaded } = useUser()
+  const router = useRouter()
   const [submissions, setSubmissions] = useState<Submission[]>([])
   const [challenge, setChallenge] = useState<Challenge | null>(null)
   const [loading, setLoading] = useState(true)
   const [selectedSubmission, setSelectedSubmission] = useState<Submission | null>(null)
   const [filter, setFilter] = useState<'all' | 'accepted' | 'wrong'>('all')
 
+  // Check if user is admin
+  const isAdmin = (user?.publicMetadata?.role as string) === 'admin'
+
   useEffect(() => {
     async function load() {
+      // Check admin access
+      if (isLoaded && !isAdmin) {
+        alert('Only administrators can view all submissions')
+        router.push(`/challenges/${slug}`)
+        return
+      }
+
       try {
-        // Load challenge to verify ownership
+        // Load challenge
         const chalRes = await fetch(`/api/challenges?slug=${slug}`)
         const chalData = await chalRes.json()
         
@@ -41,12 +53,6 @@ export default function AllSubmissionsPage({ params }: { params: { slug: string 
         }
         
         setChallenge(chalData.challenge)
-        
-        if (chalData.challenge.creatorId !== user?.id) {
-          alert('You do not have permission to view all submissions')
-          window.location.href = `/challenges/${slug}`
-          return
-        }
 
         // Load all submissions
         const res = await fetch(`/api/submissions?slug=${slug}&all=true`)
@@ -61,8 +67,8 @@ export default function AllSubmissionsPage({ params }: { params: { slug: string 
       }
     }
     
-    if (user) load()
-  }, [slug, user])
+    if (isLoaded) load()
+  }, [slug, isLoaded, isAdmin, router])
 
   const getStatusColor = (status: string) => {
     if (status === 'Accepted') return 'text-[#2cbb5d]'

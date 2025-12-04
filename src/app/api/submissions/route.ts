@@ -110,7 +110,13 @@ rl.on('line', (line) => {
 export async function POST(req: Request) {
   try {
     const body = await req.json()
-    const { userId, challengeSlug, code, language } = body as { userId: string; challengeSlug: string; code: string; language: string }
+    const { userId, challengeSlug, code, language, mode = 'submit' } = body as { 
+      userId: string; 
+      challengeSlug: string; 
+      code: string; 
+      language: string;
+      mode?: 'run' | 'submit';
+    }
 
     await connectToDatabase()
     const challenge = await Challenge.findOne({ slug: challengeSlug })
@@ -133,19 +139,6 @@ export async function POST(req: Request) {
       finalResult = await getSubmissionResult(result.token)
     }
 
-    const token = result?.token || 'sync-' + Date.now()
-    const submission = await Submission.create({ 
-      userId, 
-      challengeId: challenge._id, 
-      code, 
-      language, 
-      status: finalResult.status?.description || 'Unknown', 
-      token 
-    })
-
-    submission.executionTime = finalResult.time ? Number(finalResult.time) : undefined
-    submission.memory = finalResult.memory ? Number(finalResult.memory) : undefined
-
     const stdout = finalResult.stdout || ''
     const stderr = finalResult.stderr || ''
     const compile_output = finalResult.compile_output || ''
@@ -167,18 +160,53 @@ export async function POST(req: Request) {
     
     const allPassed = testCaseResults.every((tc: any) => tc.passed)
     const accepted = allPassed && finalResult.status?.id === 3
-    
-    if (accepted) {
-      submission.consecutiveFailures = 0
-    } else {
-      submission.consecutiveFailures = (submission.consecutiveFailures || 0) + 1
+
+    // Only save submission if mode is 'submit'
+    if (mode === 'submit') {
+      const token = result?.token || 'sync-' + Date.now()
+      const submission = await Submission.create({ 
+        userId, 
+        challengeId: challenge._id, 
+        code, 
+        language, 
+        status: finalResult.status?.description || 'Unknown', 
+        token 
+      })
+
+      submission.executionTime = finalResult.time ? Number(finalResult.time) : undefined
+      submission.memory = finalResult.memory ? Number(finalResult.memory) : undefined
+      
+      if (accepted) {
+        submission.consecutiveFailures = 0
+      } else {
+        // Get previous submission to track consecutive failures
+        const lastSubmission = await Submission.findOne({ 
+          userId, 
+          challengeId: challenge._id 
+        }).sort({ createdAt: -1 }).skip(1)
+        submission.consecutiveFailures = (lastSubmission?.consecutiveFailures || 0) + 1
+      }
+
+      await submission.save()
+
+      return NextResponse.json({ 
+        ok: true, 
+        submission, 
+        accepted,
+        stdout: stdout.trim(),
+        stderr: stderr.trim(),
+        compile_output: compile_output.trim(),
+        testCaseResults,
+        totalPassed: testCaseResults.filter((tc: any) => tc.passed).length,
+        totalTests: testCaseResults.length,
+        status: finalResult.status,
+        mode: 'submit'
+      })
     }
 
-    await submission.save()
-
+    // Run mode - just return results without saving
     return NextResponse.json({ 
       ok: true, 
-      submission, 
       accepted,
       stdout: stdout.trim(),
       stderr: stderr.trim(),
@@ -186,7 +214,10 @@ export async function POST(req: Request) {
       testCaseResults,
       totalPassed: testCaseResults.filter((tc: any) => tc.passed).length,
       totalTests: testCaseResults.length,
-      status: finalResult.status
+      status: finalResult.status,
+      executionTime: finalResult.time ? Number(finalResult.time) : undefined,
+      memory: finalResult.memory ? Number(finalResult.memory) : undefined,
+      mode: 'run'
     })
   } catch (error) {
     console.error('Submission API error', error)

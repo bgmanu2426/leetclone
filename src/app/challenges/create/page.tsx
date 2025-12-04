@@ -1,16 +1,29 @@
 'use client'
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useUser } from '@clerk/nextjs'
+import { useRouter } from 'next/navigation'
 import { JUDGE0_LANGUAGE_MAP } from '@/src/lib/constants'
 
 export default function CreateChallengePage() {
-  const { user } = useUser()
+  const { user, isLoaded } = useUser()
+  const router = useRouter()
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [difficulty, setDifficulty] = useState('Easy')
   const [languages, setLanguages] = useState<string[]>(['javascript'])
   const [testCases, setTestCases] = useState([{ input: '', output: '' }])
   const [starterCode, setStarterCode] = useState<Record<string, string>>({})
+
+  // Check if user is admin
+  const isAdmin = (user?.publicMetadata?.role as string) === 'admin'
+
+  // Redirect non-admins
+  useEffect(() => {
+    if (isLoaded && !isAdmin) {
+      alert('Only administrators can create challenges')
+      router.push('/challenges')
+    }
+  }, [isLoaded, isAdmin, router])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -39,6 +52,19 @@ export default function CreateChallengePage() {
 
   function addTestCase() {
     setTestCases([...testCases, { input: '', output: '' }])
+  }
+
+  // Show loading or redirect for non-admins
+  if (!isLoaded) {
+    return (
+      <section className="container mx-auto px-6 py-10">
+        <p className="text-slate-600">Loading...</p>
+      </section>
+    )
+  }
+
+  if (!isAdmin) {
+    return null // Will redirect via useEffect
   }
 
   return (

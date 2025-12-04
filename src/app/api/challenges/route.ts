@@ -1,9 +1,31 @@
 import { NextResponse } from 'next/server'
 import { v4 as uuidv4 } from 'uuid'
+import { auth, clerkClient } from '@clerk/nextjs/server'
 import { connectToDatabase } from '@/src/lib/db'
 import Challenge from '@/src/models/Challenge'
 
+// Helper to check if user is admin
+async function isUserAdmin(userId: string): Promise<boolean> {
+  try {
+    const client = await clerkClient()
+    const user = await client.users.getUser(userId)
+    return (user.publicMetadata?.role as string) === 'admin'
+  } catch {
+    return false
+  }
+}
+
 export async function POST(req: Request) {
+  const { userId } = await auth()
+  if (!userId) {
+    return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const admin = await isUserAdmin(userId)
+  if (!admin) {
+    return NextResponse.json({ ok: false, error: 'Admin access required' }, { status: 403 })
+  }
+
   const body = await req.json()
   const { title, description, difficulty, supportedLanguages, starterCode, testCases, creatorId } = body
   await connectToDatabase()
@@ -26,18 +48,24 @@ export async function GET(req: Request) {
 
 export async function PUT(req: Request) {
   try {
+    const { userId } = await auth()
+    if (!userId) {
+      return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const admin = await isUserAdmin(userId)
+    if (!admin) {
+      return NextResponse.json({ ok: false, error: 'Admin access required' }, { status: 403 })
+    }
+
     const body = await req.json()
-    const { slug, title, description, difficulty, supportedLanguages, starterCode, testCases, creatorId } = body
+    const { slug, title, description, difficulty, supportedLanguages, starterCode, testCases } = body
     
     await connectToDatabase()
     const challenge = await Challenge.findOne({ slug })
     
     if (!challenge) {
       return NextResponse.json({ ok: false, error: 'Challenge not found' }, { status: 404 })
-    }
-    
-    if (challenge.creatorId !== creatorId) {
-      return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 403 })
     }
     
     challenge.title = title
@@ -57,12 +85,21 @@ export async function PUT(req: Request) {
 
 export async function DELETE(req: Request) {
   try {
+    const { userId } = await auth()
+    if (!userId) {
+      return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const admin = await isUserAdmin(userId)
+    if (!admin) {
+      return NextResponse.json({ ok: false, error: 'Admin access required' }, { status: 403 })
+    }
+
     const url = new URL(req.url)
     const slug = url.searchParams.get('slug')
-    const creatorId = url.searchParams.get('creatorId')
     
-    if (!slug || !creatorId) {
-      return NextResponse.json({ ok: false, error: 'Missing slug or creatorId' }, { status: 400 })
+    if (!slug) {
+      return NextResponse.json({ ok: false, error: 'Missing slug' }, { status: 400 })
     }
     
     await connectToDatabase()
@@ -70,10 +107,6 @@ export async function DELETE(req: Request) {
     
     if (!challenge) {
       return NextResponse.json({ ok: false, error: 'Challenge not found' }, { status: 404 })
-    }
-    
-    if (challenge.creatorId !== creatorId) {
-      return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 403 })
     }
     
     await Challenge.deleteOne({ slug })
